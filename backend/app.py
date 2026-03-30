@@ -26,9 +26,9 @@ def analyze_patient_data():
         image_path = os.path.join(UPLOAD_FOLDER, file.filename)
         file.save(image_path)
 
-        # Catch the Clinical Vitals AND the requested language
+        # Catch the Clinical Vitals AND the requested language (defaults to english)
         vitals = request.form.to_dict()
-        target_lang = vitals.get('language', 'en') 
+        target_lang = vitals.get('language', 'en') # Ensure key in postman is 'language'
 
         # Run the Analysis
         radiology_results = analyze_xray(image_path)
@@ -47,7 +47,7 @@ def analyze_patient_data():
 
         # --- ELEVENLABS AUDIO USP ---
         audio_base64 = None
-        # Only generate audio for non-English requests (as per your USP)
+        # Only generate audio for non-English requests (as per your USP to save credits)
         if target_lang != 'en':
              audio_base64 = generate_audio_recommendation(final_text)
 
@@ -59,7 +59,7 @@ def analyze_patient_data():
             "explainable_insight": final_text,
             "confidence": insight.get("confidence"),
             "risk_level": insight.get("risk_level"),
-            "audio_recommendation": audio_base64 
+            "audio_recommendation": audio_base64 # Frontend will use this to play audio
         }), 200
 
     except Exception as e:
