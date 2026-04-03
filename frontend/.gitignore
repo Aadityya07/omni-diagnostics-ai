@@ -1,26 +1,18 @@
 # =========================
 # Python & Backend
 # =========================
-# Virtual Environments
 venv/
 env/
 .venv/
-
-# Cache & Compiled Files
 __pycache__/
 *.py[cod]
 *$py.class
-
-# Uploads & Temp processing files
 backend/uploads/
 backend/temp_ocr.png
-
-# Secrets & Environment Variables
 .env
 .env.local
 
 # Optional: Ignore massive AI models if you are using Git LFS
-# (Uncomment the line below if best_model.hdf5 is larger than 100MB)
 # *.hdf5 
 
 # =========================
@@ -39,6 +31,3 @@ yarn-error.log*
 # =========================
 .DS_Store
 Thumbs.db
-
-git add .
-git commit -m "feat: complete agentic AI pipeline and clean repository"
