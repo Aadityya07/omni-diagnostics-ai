@@ -24,18 +24,19 @@ export const useAnalysis = () => {
       const rad = response.radiology_analysis;
       const clin = response.clinical_analysis;
 
-      // MULTIMODAL FUSION: We take the highest risk between the X-Ray and the Clinical Vitals!
+      // MULTIMODAL FUSION
       const transformedData = {
         pneumonia: Math.max(rad?.Pneumonia || 0, clin?.Pneumonia_Risk || 0),
-        cancer: Math.max(rad?.Lung_Cancer || 0, clin?.Cancer_Risk || 0),
+        cancer: rad?.Lung_Cancer || 0, 
         tb: Math.max(rad?.Tuberculosis || 0, clin?.TB_Risk || 0),
         diabetes: clin?.Diabetes_Risk || 5,
         asthma: clin?.Asthma_Risk || 5,
+        heart: clin?.Heart_Risk || 5, 
         
         explanation: response.explainable_insight,
+        recommendationText: response.audio_recommendation_text, // Maps the hidden text!
         confidence: response.confidence,
         riskLevel: response.risk_level,
-        audioBase64: response.audio_recommendation,
         clinicalFindings: clin?.Clinical_Notes || [],
         radiologyError: rad?.error || null
       };

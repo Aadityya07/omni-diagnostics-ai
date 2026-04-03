@@ -4,7 +4,7 @@ const API_BASE_URL = 'http://127.0.0.1:5000/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 60000, 
+  timeout: 300000, 
   headers: {
     'Accept': 'application/json',
   },
@@ -40,9 +40,18 @@ export const endpoints = {
     return response.data;
   },
 
-  // Update this function inside endpoints
   generateAudio: async (text, language) => {
     const response = await api.post('/generate-audio', { text, language });
+    return response.data;
+  },
+
+  // --- NEW: The Extraction Agent Endpoint ---
+  extractVitals: async (file) => {
+    const formData = new FormData();
+    formData.append('report', file);
+    const response = await api.post('/extract-vitals', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return response.data;
   }
 };

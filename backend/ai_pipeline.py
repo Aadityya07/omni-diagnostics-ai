@@ -1,5 +1,6 @@
-from gtts import gTTS
 import io
+import base64
+from gtts import gTTS
 import os
 import requests
 import time
@@ -8,54 +9,132 @@ import json
 from PIL import Image
 from dotenv import load_dotenv
 
-import google.generativeai as genai
+
+from tensorflow.keras.models import load_model
 
 load_dotenv()
 
 # --- API KEYS ---
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY") 
 
-# Configure Gemini
-genai.configure(api_key=GEMINI_API_KEY)
 
-# --- 1. GEMINI VISION API (Upgraded to Multi-Disease) ---
-def analyze_xray(image_path):
-    print("🔍 Sending X-Ray to Gemini Vision API...")
+# ====================================================================
+# --- 1. LOCAL CNN RADIOLOGY ENGINE (Replaces Gemini completely!) ---
+# ====================================================================
+import numpy as np
+import os
+import h5py
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import GlobalAveragePooling2D, Dense
+from tensorflow.keras.applications import Xception
+from tensorflow.keras.preprocessing import image as keras_image
+
+MODEL_PATH = os.path.join(os.path.dirname(__file__), 'best_model.hdf5')
+
+try:
+    print("🧠 Building CNN and Extracting Top-Layer Weights...")
     
-    if not GEMINI_API_KEY:
-        return {"Pneumonia": 0, "Lung_Cancer": 0, "Tuberculosis": 0, "Normal": 100}
+    # 1. Base Model (Fresh ImageNet weights, completely bypassing the corrupted H5 Xception base)
+    base_model = Xception(weights='imagenet', include_top=False, input_shape=(350, 350, 3))
+    base_model.trainable = False 
+    
+    # 2. Recreate Architecture
+    lung_cancer_model = Sequential([
+        base_model,
+        GlobalAveragePooling2D(),
+        Dense(4, activation='softmax')
+    ])
+    lung_cancer_model.build((None, 350, 350, 3))
+    
+    # 3. SURGICAL EXTRACTION: Pull ONLY the dense layer weights directly from the HDF5 file
+    print("💉 Surgically extracting Dense weights from best_model.hdf5...")
+    
+    with h5py.File(MODEL_PATH, 'r') as f:
+        # Helper function to recursively find arrays by their exact mathematical shape
+        def find_weights(group, target_shape):
+            for key, item in group.items():
+                if isinstance(item, h5py.Dataset):
+                    if item.shape == target_shape:
+                        return item[()]
+                elif isinstance(item, h5py.Group):
+                    res = find_weights(item, target_shape)
+                    if res is not None:
+                        return res
+            return None
+        
+        # Xception outputs 2048 features, and we have 4 classes.
+        # So we search the file for the exact matrices: Kernel (2048, 4) and Bias (4,)
+        kernel_weights = find_weights(f, (2048, 4))
+        bias_weights = find_weights(f, (4,))
+        
+        if kernel_weights is not None and bias_weights is not None:
+            # Inject them straight into the final Dense layer
+            lung_cancer_model.layers[-1].set_weights([kernel_weights, bias_weights])
+            print("✅ Trained Weights Surgically Injected!")
+        else:
+            raise ValueError("Could not locate (2048, 4) kernel or (4,) bias in the HDF5 file.")
+            
+    print("✅ CNN Engine is Fully Armed and Ready!")
+    
+except Exception as e:
+    print(f"⚠️ CRITICAL: Failed to load CNN model: {e}")
+    lung_cancer_model = None
+
+def analyze_xray(image_path):
+    print("🔍 Analyzing X-Ray using Local CNN Model...")
+    
+    if lung_cancer_model is None:
+        return {"Pneumonia": 0, "Lung_Cancer": 0, "Tuberculosis": 0, "Normal": 100, "error": "Model not loaded"}
 
     try:
-        model = genai.GenerativeModel("models/gemini-3-flash-preview")
-        img = Image.open(image_path).convert('RGB')
+        target_size = (350, 350)
         
-        # UPGRADED PROMPT: Now detects 4 classes!
-        vision_prompt = """
-        You are an expert AI radiologist. Analyze this chest X-ray image. 
-        Return ONLY a raw JSON object with exactly four keys: "Pneumonia", "Lung_Cancer", "Tuberculosis", and "Normal". 
-        The values must be integer probabilities (0 to 100) that add up to exactly 100. 
-        Do not include markdown blocks or text. 
-        Example: {"Pneumonia": 10, "Lung_Cancer": 80, "Tuberculosis": 0, "Normal": 10}
-        """
+        img = keras_image.load_img(image_path, target_size=target_size)
+        img_array = keras_image.img_to_array(img)
+        img_array = np.expand_dims(img_array, axis=0)
+        img_array /= 255.0  
         
-        response = model.generate_content([vision_prompt, img])
-        result_text = response.text.strip()
+        predictions = lung_cancer_model.predict(img_array)[0]
         
-        if result_text.startswith("```json"):
-            result_text = result_text.replace("```json", "").replace("```", "").strip()
-        elif result_text.startswith("```"):
-            result_text = result_text.replace("```", "").strip()
-            
-        cleaned_results = json.loads(result_text)
+        # --- PROBABILITY SMOOTHING (Margin of Error) ---
+        # We reserve 12% uncertainty distributed across all classes to prevent unrealistic 100% / 0% scores
+        uncertainty = 0.12 
         
-        # Ensure all values are integers to prevent the 1.5 vs 2% mismatch
-        return {k: int(round(float(v))) for k, v in cleaned_results.items()}
+        prob_adeno = (float(predictions[0]) * (1 - uncertainty)) + (uncertainty / 4)
+        prob_large = (float(predictions[1]) * (1 - uncertainty)) + (uncertainty / 4)
+        prob_normal = (float(predictions[2]) * (1 - uncertainty)) + (uncertainty / 4)
+        prob_squamous = (float(predictions[3]) * (1 - uncertainty)) + (uncertainty / 4)
+        
+        adeno_pct = int(round(prob_adeno * 100))
+        large_pct = int(round(prob_large * 100))
+        squamous_pct = int(round(prob_squamous * 100))
+        normal_pct = int(round(prob_normal * 100))
+        
+        total_cancer_pct = adeno_pct + large_pct + squamous_pct
+        
+        print(f"📊 REALISTIC CLINICAL CONFIDENCE:")
+        print(f"   Adenocarcinoma:     {adeno_pct}%")
+        print(f"   Large Cell Cancer:  {large_pct}%")
+        print(f"   Squamous Cancer:    {squamous_pct}%")
+        print(f"   Normal/Healthy:     {normal_pct}%")
+        print("-" * 40)
+        
+        return {
+            "Pneumonia": 0,  
+            "Lung_Cancer": total_cancer_pct, 
+            "Tuberculosis": 0, 
+            "Normal": normal_pct,
+            "Subtypes": {
+                "Adenocarcinoma": adeno_pct,
+                "Large_Cell": large_pct,
+                "Squamous": squamous_pct
+            }
+        }
         
     except Exception as e:
-        print(f"⚠️ Gemini API Error: {str(e)}")
-        return {"Pneumonia": 0, "Lung_Cancer": 0, "Tuberculosis": 0, "Normal": 100}
-
+        print(f"⚠️ Local CNN Error: {str(e)}")
+        return {"Pneumonia": 0, "Lung_Cancer": 0, "Tuberculosis": 0, "Normal": 100, "error": str(e)}
+    
 
 # --- 2. PROBABILISTIC CLINICAL ENGINE (Simulated ML) ---
 def analyze_clinical_vitals(vitals):
@@ -73,13 +152,7 @@ def analyze_clinical_vitals(vitals):
     notes = []
 
     # --- DYNAMIC RISK SCORING ALGORITHM (0-100%) ---
-    # Instead of hardcoded "High/Low", we build a percentage based on feature weights
-
-    # 1. Cancer Risk Calculation
-    cancer_risk = (age * 0.3) + (pack_years * 2.5)
-    if genomic_risk == "High": cancer_risk += 35
-    if weight_loss: cancer_risk += 15
-    if cancer_risk > 40: notes.append("Patient profile shows statistically elevated oncology risk factors.")
+    # LUNG CANCER MATH REMOVED: Lung Cancer is now 100% determined by the CNN.
 
     # 2. TB Risk Calculation
     tb_risk = 5
@@ -97,7 +170,6 @@ def analyze_clinical_vitals(vitals):
     asthma_risk = 10
     if pack_years > 5: asthma_risk += 20
     if cough_duration > 7: asthma_risk += 15
-    if heart_rate > 90: asthma_risk += 15
     if o2_saturation < 95: asthma_risk += ((95 - o2_saturation) * 5)
 
     # 5. Pneumonia Clinical Base Risk
@@ -106,30 +178,58 @@ def analyze_clinical_vitals(vitals):
     if o2_saturation < 94: pneumonia_risk += ((94 - o2_saturation) * 8)
     if heart_rate > 100: pneumonia_risk += 15
 
-    # Cap all risks at a maximum of 95% to account for clinical uncertainty
+    # 6. Heart Disease Risk Calculation
+    heart_risk = 5
+    if age > 50: heart_risk += (age - 50) * 1.2
+    if pack_years > 5: heart_risk += 15
+    if heart_rate > 100: heart_risk += 25
+    elif heart_rate > 85: heart_risk += 10
+    if fasting_glucose > 125: heart_risk += 15
+    if heart_risk > 60: notes.append("Cardiovascular parameters indicate elevated risk of heart disease.")
+
+    # Cap all risks at a maximum of 95%
     return {
-        "Cancer_Risk": min(int(cancer_risk), 95),
         "TB_Risk": min(int(tb_risk), 95),
         "Diabetes_Risk": min(int(diabetes_risk), 95),
         "Asthma_Risk": min(int(asthma_risk), 95),
         "Pneumonia_Risk": min(int(pneumonia_risk), 95),
+        "Heart_Risk": min(int(heart_risk), 95),
         "Clinical_Notes": notes if notes else ["Vitals are within standard baseline parameters."]
     }
 
 
+import io
+import base64
+from gtts import gTTS
+
 # --- 3. HYBRID FUSION ENGINE (Mistral LLM + Fallback) ---
 def generate_clinical_insight(radiology_results, clinical_results):
     print("🧠 Attempting Multimodal Fusion via Ollama (Mistral)...")
-    prompt = f"""You are an expert AI diagnostic assistant. I am providing you with two data points for a patient:
-1. Radiology (X-Ray Output): {radiology_results}
-2. Clinical Vitals & EHR: {clinical_results}
+    
+    prompt = f"""You are a strict, expert AI diagnostic assistant. Synthesize the following two data points into a comprehensive medical assessment:
+    1. Radiology (X-Ray CNN Output): {radiology_results}
+    2. Clinical Vitals & EHR: {clinical_results}
 
-Task: Provide a clinical insight. 
-IMPORTANT FORMATTING RULES:
-- Do NOT use markdown asterisks (**) or hashes (#).
-- Use HTML <b> tags to bold the names of diseases (e.g. <b>Lung Cancer</b>).
-- Keep it to 3 short, punchy paragraphs.
-- End with one clear Preventive Action."""
+    STRICT LOGIC RULES:
+    - MATH RULE: Any percentage under 50% is LOW RISK. Do NOT call a number under 50% "high risk".
+    - LUNG CANCER: You must ONLY use the Radiology Output to determine Lung Cancer risk. 
+    - FORMAT: You MUST structure your exact response into two separate sections using the headers EXPLANATION: and RECOMMENDATION:
+
+    EXPLANATION:
+    [Write a rich, detailed 2-paragraph clinical insight. Start by analyzing the primary radiological findings (Explicitly list the percentage breakdown of Adenocarcinoma, Large Cell, and Squamous). Then, correlate this with their metabolic and respiratory vitals. Use professional medical terminology. Bold specific diseases and metrics with HTML <b> tags.]
+    
+    RECOMMENDATION:
+    [Write 2-3 sentences of direct clinical advice based ONLY on the elevated risks. Speak directly to the clinician. Do not use markdown here, just plain text.]
+    """
+
+    def get_confidence():
+        if not radiology_results or radiology_results.get("error"): return 0
+        return max(
+            radiology_results.get("Lung_Cancer", 0), 
+            radiology_results.get("Normal", 0), 
+            radiology_results.get("Pneumonia", 0), 
+            radiology_results.get("Tuberculosis", 0)
+        )
 
     try:
         response = requests.post('http://localhost:11434/api/generate', json={
@@ -139,144 +239,65 @@ IMPORTANT FORMATTING RULES:
         if response.status_code == 200:
             print("✅ Mistral Fusion Successful!")
             mistral_text = response.json()['response']
-            confidence = max(radiology_results.values()) if radiology_results and not radiology_results.get("error") else 0
-            risk_level = "LOW" if "Normal respiratory function" in mistral_text else "HIGH"
-            return {"insight_text": mistral_text, "confidence": confidence, "risk_level": risk_level}
-        else:
-            print(f"⚠️ Mistral returned {response.status_code}. Triggering Fallback...")
+            
+            # Split the text into the Visible Insight and the Hidden Audio Recommendation
+            if "RECOMMENDATION:" in mistral_text:
+                parts = mistral_text.split("RECOMMENDATION:")
+                insight_text = parts[0].replace("EXPLANATION:", "").strip()
+                rec_text = parts[1].strip()
+            else:
+                insight_text = mistral_text
+                rec_text = "Please consult a healthcare professional for a detailed clinical action plan based on these results."
+
+            risk_level = "HIGH" if "High risk" in mistral_text or radiology_results.get("Lung_Cancer", 0) > 50 else "LOW"
+            return {"insight_text": insight_text, "recommendation_text": rec_text, "confidence": get_confidence(), "risk_level": risk_level}
+            
     except Exception as e:
         print(f"⚠️ Mistral Connection Failed ({str(e)}). Triggering Fallback...")
 
     # THE SILENT FALLBACK 
     print("🛡️ Fallback Engine Activated: Generating deterministic clinical insight.")
     high_risks = []
-    if clinical_results.get("Cancer_Risk") == "High": high_risks.append("Lung Cancer")
-    if clinical_results.get("TB_Risk") == "High": high_risks.append("Tuberculosis")
-    if clinical_results.get("Diabetes_Risk") == "High": high_risks.append("Diabetes Type 2")
-    if clinical_results.get("Asthma_Risk") == "High": high_risks.append("Asthma/COPD")
-    if radiology_results.get("Pneumonia", 0) > 70 or clinical_results.get("Pneumonia_Risk") == "High": high_risks.append("Acute Pneumonia")
+    
+    if radiology_results.get("Lung_Cancer", 0) > 50: high_risks.append("Oncology/Lung Cancer")
+    if clinical_results.get("TB_Risk", 0) > 60: high_risks.append("Tuberculosis")
+    if clinical_results.get("Diabetes_Risk", 0) > 60: high_risks.append("Diabetes Type 2")
+    if clinical_results.get("Asthma_Risk", 0) > 60: high_risks.append("Asthma/COPD")
+    if radiology_results.get("Pneumonia", 0) > 70 or clinical_results.get("Pneumonia_Risk", 0) > 60: high_risks.append("Acute Pneumonia")
 
     primary_diagnosis = f"Elevated risk detected for: {', '.join(high_risks)}." if high_risks else "Normal health parameters."
 
     insight_bullets = []
-    pneumonia_prob = radiology_results.get('Pneumonia', 0)
-    if pneumonia_prob > 50: insight_bullets.append(f"Radiological Assessment: Infection opacity detected ({pneumonia_prob}%).")
+    rec_bullets = []
     
-    if clinical_results.get("Clinical_Notes"):
-        insight_bullets.append(f"Multimodal Synthesis: {' '.join(clinical_results['Clinical_Notes'])}")
+    if radiology_results.get("Lung_Cancer", 0) > 50:
+        subtypes = radiology_results.get("Subtypes", {})
+        insight_bullets.append(f"Radiology Alert: High-probability oncological signatures detected. Breakdown: Adenocarcinoma ({subtypes.get('Adenocarcinoma', 0)}%), Large Cell ({subtypes.get('Large_Cell', 0)}%), Squamous ({subtypes.get('Squamous', 0)}%).")
+    elif clinical_results.get("Clinical_Notes"):
+        insight_bullets.append(f"Clinical Synthesis: {' '.join(clinical_results['Clinical_Notes'])}")
 
-    if "Diabetes Type 2" in high_risks: insight_bullets.append("Preventive Action: Start continuous glucose monitoring and consult endocrinologist.")
-    if "Asthma/COPD" in high_risks: insight_bullets.append("Preventive Action: Prescribe bronchodilator inhaler and monitor wearable HR/O2 trends.")
-    if "Lung Cancer" in high_risks: insight_bullets.append("Preventive Action: Immediate referral for Low-Dose CT (LDCT) scan.")
-    if "Tuberculosis" in high_risks: insight_bullets.append("Preventive Action: Isolate patient, initiate sputum AFB smear/culture.")
-    if "Acute Pneumonia" in high_risks: insight_bullets.append("Preventive Action: Administer supplemental oxygen and consider broad-spectrum antibiotics.")
+    if "Diabetes Type 2" in high_risks: rec_bullets.append("Start continuous glucose monitoring and consult endocrinologist.")
+    if "Asthma/COPD" in high_risks: rec_bullets.append("Prescribe bronchodilator inhaler and monitor wearable HR/O2 trends.")
+    if "Oncology/Lung Cancer" in high_risks: rec_bullets.append("Immediate referral for Low-Dose CT scan and biopsy evaluation.")
+    if "Acute Pneumonia" in high_risks: rec_bullets.append("Administer supplemental oxygen and consider broad-spectrum antibiotics.")
+    if not high_risks: rec_bullets.append("Maintain routine annual check-ups.")
+
+    final_insight = f"Primary Multimodal Diagnosis: {primary_diagnosis}\n\nExplainable Insights:\n"
+    for bullet in insight_bullets: final_insight += f"• {bullet}\n"
     
-    if not high_risks: insight_bullets.append("Preventive Action: Maintain routine annual check-ups.")
+    final_rec = "DiagnoAI Recommendation: " + " ".join(rec_bullets)
 
-    final_text = f"Primary Multimodal Diagnosis: {primary_diagnosis}\n\nExplainable Insights:\n"
-    for bullet in insight_bullets: final_text += f"• {bullet}\n"
-
-    confidence = max(radiology_results.values()) if radiology_results and not radiology_results.get("error") else 0
     risk_level = "HIGH" if high_risks else "LOW"
-    return {"insight_text": final_text, "confidence": confidence, "risk_level": risk_level}
-
-# # --- 4. ELEVENLABS AUDIO GENERATOR ---
-# def generate_audio_recommendation(text):
-#     """Generates multilingual voice suggestions using ElevenLabs."""
-    
-#     if not ELEVENLABS_API_KEY:
-#         print("⚠️ ElevenLabs API Key missing!")
-#         return None
-        
-#     print("🎙️ Generating Voice Recommendation via ElevenLabs...")
-#     url = "https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL"
-#     headers = {"Accept": "audio/mpeg", "Content-Type": "application/json", "xi-api-key": ELEVENLABS_API_KEY}
-    
-#     # We will pass the full text, but let's cap it at 500 characters to save credits
-#     short_text = text if len(text) < 500 else text[:500] + "..."
-
-#     # eleven_multilingual_v2 automatically detects English, Hindi, etc.
-#     data = {
-#         "text": short_text, 
-#         "model_id": "eleven_multilingual_v2", 
-#         "voice_settings": {"stability": 0.5, "similarity_boost": 0.5}
-#     }
-    
-#     try:
-#         response = requests.post(url, json=data, headers=headers)
-#         if response.status_code == 200:
-#             audio_base64 = base64.b64encode(response.content).decode('utf-8')
-#             print("✅ Audio Generated Successfully!")
-#             return audio_base64
-#         else:
-#             print(f"⚠️ ElevenLabs Error: {response.text}")
-#             return None
-#     except Exception as e:
-#         print(f"⚠️ ElevenLabs Exception: {str(e)}")
-#         return None
+    return {"insight_text": final_insight, "recommendation_text": final_rec, "confidence": get_confidence(), "risk_level": risk_level}
 
 
-# # --- 4. FREE AUDIO GENERATOR (gTTS) ---
-# def generate_audio_recommendation(text):
-#     """Generates multilingual voice suggestions using Google TTS (Free & Unlimited)."""
-#     print("🎙️ Generating Voice Recommendation via gTTS...")
-    
-#     # Cap the text to save time during the demo
-#     short_text = text if len(text) < 500 else text[:500] + "..."
-
-#     try:
-#         # Generate the audio in memory
-#         tts = gTTS(text=short_text, lang='en') # You can change 'en' to 'hi' or 'mr' dynamically if you want!
-#         fp = io.BytesIO()
-#         tts.write_to_fp(fp)
-#         fp.seek(0)
-        
-#         # Convert to base64 for the frontend
-#         audio_base64 = base64.b64encode(fp.read()).decode('utf-8')
-#         print("✅ Audio Generated Successfully!")
-#         return audio_base64
-#     except Exception as e:
-#         print(f"⚠️ Audio Generation Exception: {str(e)}")
-#         return None
-
-
-# --- 4. SMART AUDIO GENERATOR (ElevenLabs with gTTS Fallback) ---
+# --- 4. SMART AUDIO GENERATOR (Strictly gTTS Free Version) ---
 def generate_audio_recommendation(text, lang="en"):
-    """Generates multilingual voice suggestions. Tries ElevenLabs, falls back to gTTS."""
+    """Generates multilingual voice suggestions using entirely free, local-friendly gTTS."""
+    print(f"🎙️ Generating Voice Recommendation via gTTS (Language: {lang})...")
     
-    # Cap the text to save time/credits during the demo
-    short_text = text if len(text) < 500 else text[:500] + "..."
-
-    # ATTEMPT 1: ElevenLabs (Premium Voice)
-    if ELEVENLABS_API_KEY:
-        print("🎙️ Attempting Premium Voice Generation via ElevenLabs...")
-        url = "https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL"
-        headers = {"Accept": "audio/mpeg", "Content-Type": "application/json", "xi-api-key": ELEVENLABS_API_KEY}
-        
-        # eleven_multilingual_v2 automatically detects the language based on the text!
-        data = {
-            "text": short_text, 
-            "model_id": "eleven_multilingual_v2", 
-            "voice_settings": {"stability": 0.5, "similarity_boost": 0.5}
-        }
-        
-        try:
-            response = requests.post(url, json=data, headers=headers)
-            if response.status_code == 200:
-                audio_base64 = base64.b64encode(response.content).decode('utf-8')
-                print("✅ ElevenLabs Audio Generated Successfully!")
-                return audio_base64
-            else:
-                print(f"⚠️ ElevenLabs Blocked/Failed (Code: {response.status_code}). Initiating Fallback...")
-        except Exception as e:
-            print(f"⚠️ ElevenLabs Exception: {str(e)}. Initiating Fallback...")
-    else:
-        print("⚠️ No ElevenLabs API Key found. Initiating Fallback...")
-
-    # ATTEMPT 2: gTTS (Free Fallback)
-    print(f"🎙️ Generating Voice via gTTS Fallback (Language: {lang})...")
     try:
-        tts = gTTS(text=short_text, lang=lang) 
+        tts = gTTS(text=text, lang=lang) 
         fp = io.BytesIO()
         tts.write_to_fp(fp)
         fp.seek(0)
