@@ -4,7 +4,7 @@ from flask_cors import CORS
 from deep_translator import GoogleTranslator
 
 # Import our robust pipeline
-from ai_pipeline import analyze_xray, analyze_clinical_vitals, generate_clinical_insight, generate_audio_recommendation
+from ai_pipeline import analyze_xray, analyze_clinical_vitals, generate_clinical_insight, generate_audio_recommendation, generate_chat_response
 
 # --- NEW: Import our Agent ---
 # Change this line:
@@ -146,7 +146,32 @@ def extract_vitals():
         print(f"Error extracting vitals: {e}")
         return jsonify({"error": str(e)}), 500
     
+
+
+@app.route('/api/chat', methods=['POST'])
+def chat_api():
+    try:
+        data = request.json
+        user_message = data.get('message')
+        chat_history = data.get('history', [])
+        patient_context = data.get('context', {})
         
+        if not user_message:
+            return jsonify({"error": "No message provided"}), 400
+
+        result = generate_chat_response(user_message, chat_history, patient_context)
+        
+        if result["status"] == "success":
+            return jsonify({"response": result["response"]}), 200
+        else:
+            return jsonify({"error": result["response"]}), 500
+
+    except Exception as e:
+        print(f"Chat API Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+
 if __name__ == '__main__':
     print("🚀 Omni-Diagnostics AI Backend is running on port 5000...")
     app.run(debug=True, port=5000)

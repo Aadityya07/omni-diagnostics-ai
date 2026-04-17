@@ -1,0 +1,9 @@
+Ollama: ollama run mistral and we are using: ollama run llava (run this only)
+
+Venv: venv\Scripts\Activate
+
+
+backend: python app.py
+
+
+frontend: npm run dev

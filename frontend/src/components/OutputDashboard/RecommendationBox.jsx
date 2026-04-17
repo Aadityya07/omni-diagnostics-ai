@@ -4,20 +4,24 @@ import { endpoints } from '../../services/api';
 import { Play, Square, Loader2, AlertCircle } from 'lucide-react';
 
 const RecommendationBox = ({ recommendationText }) => {
-  const { currentLanguage } = useLanguage();
+  const { t, currentLanguage } = useLanguage(); // Added 't' here
   
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [audioSrc, setAudioSrc] = useState(null);
+  const [audioCache, setAudioCache] = useState({});
+  const [loadingStatus, setLoadingStatus] = useState({});
+  const [wantsToPlay, setWantsToPlay] = useState(false);
+  
   const [isPlaying, setIsPlaying] = useState(false);
   const [displayedText, setDisplayedText] = useState("");
   const [progress, setProgress] = useState(0);
   const [hasFinished, setHasFinished] = useState(false);
-  const [audioFailed, setAudioFailed] = useState(false);
+  
+  // NEW: State for psychological delay
+  const [hasPlayedMap, setHasPlayedMap] = useState({});
+  const [artificialLoading, setArtificialLoading] = useState(false);
   
   const audioRef = useRef(null);
   const typewriterTimerRef = useRef(null);
 
-  // Get the localized text
   let fullText = "";
   if (typeof recommendationText === 'object' && recommendationText !== null) {
     fullText = recommendationText[currentLanguage] || recommendationText['en'] || "";
@@ -25,22 +29,67 @@ const RecommendationBox = ({ recommendationText }) => {
     fullText = recommendationText || "No recommendation available.";
   }
   
-  // Clean text for audio
   const cleanText = fullText.replace(/<[^>]*>?/gm, '').replace(/[*#]/g, '');
 
-  // Reset when language or patient changes
+  // SILENT BACKGROUND PRE-FETCH
   useEffect(() => {
-    setAudioSrc(null);
+    if (!recommendationText || typeof recommendationText !== 'object') return;
+
+    const prefetchAudio = async () => {
+      const langs = ['en', 'hi', 'mr'];
+      for (const lang of langs) {
+        const textToSpeak = recommendationText[lang];
+        if (textToSpeak && !audioCache[lang] && loadingStatus[lang] !== 'loading' && loadingStatus[lang] !== 'ready') {
+          setLoadingStatus(prev => ({ ...prev, [lang]: 'loading' }));
+          try {
+            const cText = textToSpeak.replace(/<[^>]*>?/gm, '').replace(/[*#]/g, '');
+            const response = await endpoints.generateAudio(cText, lang); 
+            if (response.audio_base64) {
+              setAudioCache(prev => ({ ...prev, [lang]: `data:audio/mpeg;base64,${response.audio_base64}` }));
+              setLoadingStatus(prev => ({ ...prev, [lang]: 'ready' }));
+            } else {
+              setLoadingStatus(prev => ({ ...prev, [lang]: 'error' }));
+            }
+          } catch (err) {
+            setLoadingStatus(prev => ({ ...prev, [lang]: 'error' }));
+          }
+        }
+      }
+    };
+    prefetchAudio();
+  }, [recommendationText]);
+
+  useEffect(() => {
     setIsPlaying(false);
     setDisplayedText("");
     setProgress(0);
     setHasFinished(false);
-    setAudioFailed(false);
-    if (audioRef.current) audioRef.current.pause();
-    if (typewriterTimerRef.current) clearInterval(typewriterTimerRef.current);
+    setWantsToPlay(false);
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    if (typewriterTimerRef.current) {
+      clearInterval(typewriterTimerRef.current);
+    }
   }, [currentLanguage, recommendationText]);
 
-  // Sync Text with Audio Time
+  useEffect(() => {
+    if (wantsToPlay && !artificialLoading) {
+      if (audioCache[currentLanguage]) {
+        if (audioRef.current) {
+          audioRef.current.play();
+          setIsPlaying(true);
+        }
+        setWantsToPlay(false);
+      } else if (loadingStatus[currentLanguage] === 'error') {
+        startFallbackTypewriter();
+        setWantsToPlay(false);
+      }
+    }
+  }, [audioCache, currentLanguage, wantsToPlay, loadingStatus, artificialLoading]);
+
   const handleTimeUpdate = () => {
     if (audioRef.current && !hasFinished) {
       const current = audioRef.current.currentTime;
@@ -48,7 +97,6 @@ const RecommendationBox = ({ recommendationText }) => {
       if (total) {
         const percent = (current / total) * 100;
         setProgress(percent);
-        
         const charsToShow = Math.floor((current / total) * cleanText.length);
         setDisplayedText(cleanText.substring(0, charsToShow));
       }
@@ -62,7 +110,6 @@ const RecommendationBox = ({ recommendationText }) => {
     setDisplayedText(cleanText); 
   };
 
-  // Fallback typewriter if internet/gTTS fails
   const startFallbackTypewriter = () => {
     setIsPlaying(true);
     let i = 0;
@@ -78,47 +125,55 @@ const RecommendationBox = ({ recommendationText }) => {
     }, speed);
   };
 
-  const handlePlayClick = async () => {
+  const handlePlayClick = () => {
     if (isPlaying) {
       if (audioRef.current) audioRef.current.pause();
       if (typewriterTimerRef.current) clearInterval(typewriterTimerRef.current);
       setIsPlaying(false);
+      setWantsToPlay(false);
       return;
     }
 
-    if (audioSrc && audioRef.current) {
-      audioRef.current.play();
+    // NEW: 2-Second Psychological Delay for the FIRST time playing this language
+    if (!hasPlayedMap[currentLanguage]) {
+      setArtificialLoading(true);
+      setTimeout(() => {
+        setArtificialLoading(false);
+        setHasPlayedMap(prev => ({ ...prev, [currentLanguage]: true }));
+        
+        if (audioCache[currentLanguage]) {
+          if (audioRef.current) audioRef.current.play();
+          setIsPlaying(true);
+        } else if (loadingStatus[currentLanguage] === 'error') {
+          startFallbackTypewriter();
+        } else {
+          setWantsToPlay(true);
+        }
+      }, 2000);
+      return;
+    }
+
+    // Instant Play if they've already heard it once
+    if (audioCache[currentLanguage]) {
+      if (audioRef.current) audioRef.current.play();
       setIsPlaying(true);
       return;
     }
-    
-    if (audioFailed) {
+
+    if (loadingStatus[currentLanguage] === 'loading') {
+      setWantsToPlay(true);
+      return;
+    }
+
+    if (loadingStatus[currentLanguage] === 'error') {
       startFallbackTypewriter();
       return;
     }
 
-    setIsGenerating(true);
-    try {
-      const response = await endpoints.generateAudio(cleanText, currentLanguage); 
-      if (response.audio_base64) {
-        setAudioSrc(`data:audio/mpeg;base64,${response.audio_base64}`);
-        setTimeout(() => {
-          if (audioRef.current) {
-            audioRef.current.play();
-            setIsPlaying(true);
-          }
-        }, 100);
-      } else {
-        throw new Error("No audio returned");
-      }
-    } catch (err) {
-      console.error("Audio generation failed:", err);
-      setAudioFailed(true);
-      startFallbackTypewriter(); 
-    } finally {
-      setIsGenerating(false);
-    }
+    setWantsToPlay(true);
   };
+
+  const showGenerating = artificialLoading || (loadingStatus[currentLanguage] === 'loading' && wantsToPlay);
 
   return (
     <div style={{
@@ -127,26 +182,24 @@ const RecommendationBox = ({ recommendationText }) => {
       marginTop: '24px', position: 'relative', overflow: 'hidden'
     }}>
       
-      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#141414', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ color: '#36565F' }}>✦</span> DiagnoAI Clinical Advice
+          <span style={{ color: '#36565F' }}>✦</span> DiagnoAI {t('clinicalAdvice')}
         </h3>
 
-        {/* The Play Button */}
         <button 
           onClick={handlePlayClick}
-          disabled={isGenerating || hasFinished}
+          disabled={(hasFinished && !isPlaying) || showGenerating}
           style={{
             display: 'flex', alignItems: 'center', gap: '8px',
             background: isPlaying ? 'rgba(229, 83, 83, 0.1)' : 'rgba(153, 221, 204, 0.2)',
             color: isPlaying ? '#E55353' : '#2C4A52',
             border: `1px solid ${isPlaying ? 'rgba(229, 83, 83, 0.3)' : 'rgba(153, 221, 204, 0.5)'}`,
             padding: '6px 14px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 600,
-            cursor: (isGenerating || hasFinished) ? 'not-allowed' : 'pointer', transition: 'all 0.3s',
+            cursor: (hasFinished || showGenerating) ? 'not-allowed' : 'pointer', transition: 'all 0.3s',
           }}
         >
-          {isGenerating ? (
+          {showGenerating ? (
              <><Loader2 size={16} className="animate-spin" /> Connecting...</>
           ) : isPlaying ? (
              <><Square size={16} fill="currentColor" /> Pause</>
@@ -158,17 +211,16 @@ const RecommendationBox = ({ recommendationText }) => {
         </button>
       </div>
       
-      {audioSrc && (
+      {audioCache[currentLanguage] && (
         <audio 
           ref={audioRef} 
-          src={audioSrc} 
+          src={audioCache[currentLanguage]} 
           onTimeUpdate={handleTimeUpdate}
           onEnded={handleAudioEnd} 
           style={{ display: 'none' }} 
         />
       )}
 
-      {/* The Text Box (Glassmorphism Style) */}
       <div style={{ 
         minHeight: '80px', background: 'rgba(255,255,255,0.5)', borderRadius: '12px', 
         padding: '16px', color: '#2C4A52', fontSize: '1.05rem', lineHeight: 1.6, fontStyle: 'italic',
@@ -178,12 +230,10 @@ const RecommendationBox = ({ recommendationText }) => {
         {isPlaying && <span className="typing-cursor">|</span>}
       </div>
 
-      {/* Progress Bar Strip */}
       <div style={{ width: '100%', height: '4px', background: 'rgba(189, 219, 209, 0.4)', borderRadius: '4px', marginTop: '20px', overflow: 'hidden' }}>
         <div style={{ width: `${progress}%`, height: '100%', background: '#36565F', transition: 'width 0.1s linear' }} />
       </div>
 
-      {/* Disclaimer */}
       {hasFinished && (
         <div className="animate-fadeIn" style={{ 
           marginTop: '16px', display: 'flex', alignItems: 'center', gap: '8px', 

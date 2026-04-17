@@ -14,7 +14,9 @@ export const languages = {
       cancerRisk: 'Cancer Risk',
       diabetesRisk: 'Diabetes Risk',
       asthmaRisk: 'Asthma Risk',
+      heartRisk: 'Heart Risk',
       aiInsight: 'AI Clinical Insight',
+      clinicalAdvice: 'Clinical Advice', // Added Here
       whyResult: 'Why this result?',
       radiologyEvidence: 'Radiology Evidence',
       clinicalFactors: 'Clinical Factors'
@@ -31,7 +33,9 @@ export const languages = {
       cancerRisk: 'कैंसर जोखिम',
       diabetesRisk: 'मधुमेह जोखिम',
       asthmaRisk: 'अस्थमा जोखिम',
+      heartRisk: 'हृदय जोखिम',
       aiInsight: 'एआई नैदानिक अंतर्दृष्टि',
+      clinicalAdvice: 'नैदानिक सलाह', // Added Here
       whyResult: 'यह परिणाम क्यों?',
       radiologyEvidence: 'रेडियोलॉजी साक्ष्य',
       clinicalFactors: 'नैदानिक कारक'
@@ -48,7 +52,9 @@ export const languages = {
       cancerRisk: 'कर्करोग धोका',
       diabetesRisk: 'मधुमेह धोका',
       asthmaRisk: 'अस्थमा धोका',
+      heartRisk: 'हृदय धोका',
       aiInsight: 'एआय क्लिनिकल अंतर्दृष्टी',
+      clinicalAdvice: 'क्लिनिकल सल्ला', // Added Here
       whyResult: 'हे परिणाम का?',
       radiologyEvidence: 'रेडिओलॉजी पुरावा',
       clinicalFactors: 'नैदानिक घटक'

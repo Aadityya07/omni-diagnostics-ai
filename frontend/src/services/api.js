@@ -53,6 +53,12 @@ export const endpoints = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
+  },
+
+  // --- NEW: Chatbot Endpoint ---
+  chatWithMistral: async (message, history, context) => {
+    const response = await api.post('/chat', { message, history, context });
+    return response.data;
   }
 };
 

@@ -107,7 +107,7 @@ const InputPanel = ({ onAnalyze, isAnalyzing }) => {
 
   return (
     <div className="glass-premium custom-scrollbar" style={{
-      width: '35%',
+      width: '100%',
       minWidth: '380px',
       padding: '24px',
       display: 'flex',

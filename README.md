@@ -1,3 +1,4 @@
+```markdown
 # 🩺 DiagnoAI
 **An Agentic AI diagnostic assistant powered by Multimodal Orchestration, deterministic filtering, and local Vision-Language Models.**
 
@@ -13,6 +14,7 @@ Medical misdiagnoses and diagnostic bottlenecks often occur because clinical dat
 DiagnoAI is a fully local, multimodal AI diagnostic pipeline. Rather than relying on a single, hallucination-prone model, it utilizes an **Agentic AI Workflow**. It routes tasks dynamically, employs deterministic Python tools for mathematical filtering, and synthesizes data across multiple specialized AI models.
 
 ### Key Features
+* **DiagnoAI Co-Pilot (New!):** An interactive, context-aware chatbot that overlays seamlessly onto the dashboard. It reads the patient's generated risks and recommendations, allowing users to ask natural language questions about their diagnosis in a beautiful, glassmorphism UI.
 * **Two-Phase Agentic Triage (The "Bouncer"):** A hybrid security layer that mathematically filters out non-medical images (using pixel color variance) before passing grayscale scans to a localized Vision Model for structural validation.
 * **Dual-Pipeline OCR Extraction:** Automatically detects document types and dynamically routes physical scanned PDFs through a deep learning OCR engine (`EasyOCR`), piping the raw text into Mistral for flawless JSON parsing.
 * **Local CNN Pathology Engine:** A custom-trained deep learning CNN mathematically scores lung cancer probabilities from Axial CTs and Chest X-rays.
@@ -29,11 +31,14 @@ DiagnoAI is a fully local, multimodal AI diagnostic pipeline. Rather than relyin
 2.  **Agent 2: Medical Data Extraction**
     * Detects if the input is a native PDF or image.
     * Extracts raw text via **PyMuPDF** or **EasyOCR** (Neural Network OCR).
-    * Passes pure text to **Mistral** with a strict system prompt to map synonymous medical terms (e.g., "Blood Sugar" to "Fasting Glucose") into a structured JSON.
+    * Passes pure text to **Mistral** with a strict system prompt to map synonymous medical terms into a structured JSON.
 3.  **The Clinical Engine**
     * **TensorFlow CNN** processes the validated radiological scan.
     * **Mistral** fuses the CNN output with the JSON vitals to generate a cohesive diagnostic explanation.
-4.  **Frontend Generation**
+4.  **DiagnoAI Co-Pilot (Chat Engine)**
+    * A draggable, floating UI component that swaps seamlessly with the patient data panel.
+    * Passes the synthesized clinical context back to **Mistral** with strict conversational boundaries to ensure hallucination-free, empathetic patient Q&A.
+5.  **Frontend Generation**
     * React UI dynamically maps CNN probabilities to an animated Anatomical Risk UI.
     * Python `gTTS` translates and dictates the clinical recommendation to the user in English, Hindi, or Marathi.
 
@@ -70,8 +75,38 @@ pip install -r requirements.txt
 
 # 4. Start the Flask Server
 python app.py
+```
 
+### Frontend Setup
+```bash
+# 1. Navigate to the frontend directory
+cd frontend
 
+# 2. Install dependencies
+npm install
 
-⚠️ Disclaimer
-DiagnoAI is a prototype designed to demonstrate Agentic AI workflows in a healthcare context. It is not intended for actual medical use, diagnosis, or treatment. Always consult a certified healthcare professional.
+# 3. Start the Vite development server
+npm run dev
+```
+
+---
+
+*⚠️ **Disclaimer:** DiagnoAI is a prototype designed to demonstrate Agentic AI workflows in a healthcare context. It is not intended for actual medical use, diagnosis, or treatment. Always consult a certified healthcare professional.*
+```
+
+---
+
+### 3. Git Commands to Push Your Code
+
+Open a new terminal window inside your main project folder (`C:\Users\aditya\Documents\Projects\DiagnoAI`), and run these commands one by one to push everything to your repository:
+
+```bash
+# 1. Add all the modified files to the staging area
+git add .
+
+# 2. Commit the changes with a clear message
+git commit -m "feat: Add Context-Aware Chatbot Co-Pilot with Glassmorphism UI"
+
+# 3. Push to your main branch on GitHub
+git push origin main
+```

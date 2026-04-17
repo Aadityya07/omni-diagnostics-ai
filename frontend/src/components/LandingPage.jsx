@@ -1,5 +1,5 @@
 import React from 'react';
-import { Aperture, Activity, FileText, Stethoscope, ArrowRight, ShieldCheck, Zap, BrainCircuit } from 'lucide-react';
+import { Aperture, FileText, ShieldCheck, Volume2, ArrowRight } from 'lucide-react';
 
 const LandingPage = ({ onLaunch }) => {
   return (
@@ -31,12 +31,12 @@ const LandingPage = ({ onLaunch }) => {
           alignItems: 'center',
           
           /* The True Glassmorphism Effect */
-          background: 'rgba(255, 255, 255, 0.25)', /* Very sheer */
-          backdropFilter: 'blur(24px)', /* Heavy blur */
+          background: 'rgba(255, 255, 255, 0.25)', 
+          backdropFilter: 'blur(24px)', 
           WebkitBackdropFilter: 'blur(24px)',
-          border: '1px solid rgba(255, 255, 255, 0.7)', /* Crisp bright edge */
+          border: '1px solid rgba(255, 255, 255, 0.7)', 
           borderRadius: '100px',
-          boxShadow: '0 8px 32px rgba(54, 86, 95, 0.08)' /* Soft colored shadow */
+          boxShadow: '0 8px 32px rgba(54, 86, 95, 0.08)' 
         }}>
           
           {/* 1. Left side: New Unique AI Logo (Aperture) */}
@@ -73,47 +73,50 @@ const LandingPage = ({ onLaunch }) => {
         padding: '80px 24px 0'
       }}>
         
-        {/* Headline (Badge removed as requested) */}
+        {/* Headline - Sleek and Clean */}
         <h1 className="animate-fadeIn" style={{
-          fontSize: '4.5rem',
+          fontSize: '3.4rem', 
           fontWeight: 800,
-          lineHeight: 1.1,
-          marginBottom: '24px',
+          lineHeight: 1.15,
+          letterSpacing: '-1px', 
+          marginBottom: '20px',
           color: '#141414',
-          maxWidth: '900px'
+          maxWidth: '800px'
         }}>
-          Intelligent Triage. <br />
-          <span style={{ color: '#36565F' }}>Multimodal Precision.</span>
+          Your Health Data, Decoded. <br />
+          <span style={{ color: '#36565F' }}>Agentic Medical Intelligence.</span>
         </h1>
 
         {/* Subheadline */}
         <p className="animate-fadeIn" style={{
-          fontSize: '1.15rem',
+          fontSize: '1.1rem',
           color: '#2C4A52',
-          maxWidth: '650px',
-          marginBottom: '48px',
+          maxWidth: '600px',
+          marginBottom: '40px',
           lineHeight: 1.6,
           animationDelay: '0.1s'
         }}>
-          Fusing Radiology, Clinical Vitals, EHR, and Wearable data to provide instant, explainable insights for evidence-based decision making.
+          Transform confusing lab reports and complex radiological scans into clear, actionable, and secure insights using a fully local, multimodal AI co-pilot.
         </p>
 
-        {/* Action Buttons */}
+        {/* Action Buttons - With sleek ArrowRight icon */}
         <div className="animate-fadeIn" style={{ display: 'flex', gap: '16px', animationDelay: '0.2s' }}>
           <button 
             onClick={onLaunch}
             style={{
               background: '#36565F',
               color: '#FFFFFF',
-              padding: '16px 32px',
+              padding: '14px 32px', 
               borderRadius: '40px',
-              fontSize: '1.1rem',
+              fontSize: '1.05rem',
+              fontWeight: 600,
               border: 'none',
               display: 'flex',
               alignItems: 'center',
-              gap: '12px',
+              gap: '10px',
               boxShadow: '0 4px 14px rgba(54, 86, 95, 0.2)',
-              transition: 'all 0.3s ease'
+              transition: 'all 0.3s ease',
+              cursor: 'pointer'
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = 'translateY(-2px)';
@@ -124,9 +127,8 @@ const LandingPage = ({ onLaunch }) => {
               e.currentTarget.style.boxShadow = '0 4px 14px rgba(54, 86, 95, 0.2)';
             }}
           >
-            <Activity size={20} />
-            Initialize Analysis
-            <ArrowRight size={20} />
+            Initialize Analysis 
+            <ArrowRight size={18} strokeWidth={2.5} />
           </button>
         </div>
       </section>
@@ -140,18 +142,18 @@ const LandingPage = ({ onLaunch }) => {
       }}>
         <h2 style={{ fontSize: '2.5rem', fontWeight: 800, color: '#141414', marginBottom: '16px' }}>Why DiagnoAI?</h2>
         <p style={{ color: '#36565F', fontSize: '1.1rem', marginBottom: '64px', maxWidth: '600px', margin: '0 auto 64px' }}>
-          Traditional diagnostics rely on data silos. We combine every metric to give clinicians the full picture in seconds.
+          We bridge the health literacy gap by giving every patient access to a secure, autonomous medical translator.
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '32px' }}>
           {/* Feature 1 */}
           <div className="glass-premium" style={{ padding: '40px 32px', textAlign: 'left' }}>
             <div style={{ background: 'rgba(153, 221, 204, 0.3)', width: '56px', height: '56px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#36565F', marginBottom: '24px' }}>
-              <BrainCircuit size={28} />
+              <FileText size={28} />
             </div>
-            <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: '#141414', marginBottom: '12px' }}>Multimodal Fusion</h3>
+            <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: '#141414', marginBottom: '12px' }}>Clinical Translation</h3>
             <p style={{ color: '#2C4A52', lineHeight: 1.6, fontSize: '0.95rem' }}>
-              Our engine cross-references Chest X-Rays using Vision AI with tabular EHR and genomic data to prevent missed diagnoses.
+              We instantly translate complex medical jargon and tabular lab reports into clear, understandable insights so you never have to blindly Google your symptoms again.
             </p>
           </div>
 
@@ -160,20 +162,20 @@ const LandingPage = ({ onLaunch }) => {
             <div style={{ background: 'rgba(153, 221, 204, 0.3)', width: '56px', height: '56px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#36565F', marginBottom: '24px' }}>
               <ShieldCheck size={28} />
             </div>
-            <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: '#141414', marginBottom: '12px' }}>Explainable AI</h3>
+            <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: '#141414', marginBottom: '12px' }}>Zero-Leakage Privacy</h3>
             <p style={{ color: '#2C4A52', lineHeight: 1.6, fontSize: '0.95rem' }}>
-              We don't just output a risk score. Our LLM strictly details *why* a diagnosis was reached to build trust with medical staff.
+              Your health data is highly sensitive. Our local Agentic architecture processes your medical scans and vitals directly on-device, ensuring 100% HIPAA-grade data privacy.
             </p>
           </div>
 
           {/* Feature 3 */}
           <div className="glass-premium" style={{ padding: '40px 32px', textAlign: 'left' }}>
             <div style={{ background: 'rgba(153, 221, 204, 0.3)', width: '56px', height: '56px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#36565F', marginBottom: '24px' }}>
-              <Zap size={28} />
+              <Volume2 size={28} />
             </div>
-            <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: '#141414', marginBottom: '12px' }}>Fault Tolerant</h3>
+            <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: '#141414', marginBottom: '12px' }}>Multilingual Voice AI</h3>
             <p style={{ color: '#2C4A52', lineHeight: 1.6, fontSize: '0.95rem' }}>
-              Built for unstable hospital networks. If APIs fail or Wi-Fi drops, our deterministic heuristic fallback engine ensures 100% uptime.
+              Accessibility matters. Our hybrid engine not only synthesizes your health risks but explains them to you aloud in English, Hindi, or Marathi for total comprehension.
             </p>
           </div>
         </div>
@@ -186,13 +188,13 @@ const LandingPage = ({ onLaunch }) => {
         margin: '0 auto',
         textAlign: 'center'
       }}>
-        <h2 style={{ fontSize: '2.5rem', fontWeight: 800, color: '#141414', marginBottom: '32px' }}>About Our Mission</h2>
+        <h2 style={{ fontSize: '2.5rem', fontWeight: 800, color: '#141414', marginBottom: '32px' }}>Empowering the Patient</h2>
         <div className="glass-premium" style={{ padding: '48px', textAlign: 'center' }}>
           <p style={{ color: '#2C4A52', fontSize: '1.1rem', lineHeight: 1.8, marginBottom: '24px' }}>
-            Diagnostic delays occur when medical data is trapped in silos. A doctor might see a clean X-ray but miss a severe genomic risk factor buried in an EHR file. 
+            Receiving a medical report shouldn't be a terrifying experience. Yet, millions of patients are handed complex lab results and radiological scans filled with dense medical jargon, leaving them anxious, confused, and prone to medical misinformation online. 
           </p>
           <p style={{ color: '#2C4A52', fontSize: '1.1rem', lineHeight: 1.8, marginBottom: '32px' }}>
-            <strong>DiagnoAI</strong> was built to solve this. We are engineering the ultimate AI co-pilot for healthcare professionals—empowering them to synthesize all patient data simultaneously, catch high-risk patterns instantly, and save lives.
+            <strong>DiagnoAI</strong> was built to bridge this health literacy gap. By orchestrating deterministic math filters, deep learning OCR, and local vision models, we created an autonomous, secure medical co-pilot that empowers you to understand your own body before you even step into the doctor's office.
           </p>
           <button 
             onClick={onLaunch}
@@ -204,7 +206,8 @@ const LandingPage = ({ onLaunch }) => {
               border: '2px solid #36565F',
               fontWeight: 600,
               fontSize: '1rem',
-              transition: 'all 0.3s'
+              transition: 'all 0.3s',
+              cursor: 'pointer'
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = '#36565F';

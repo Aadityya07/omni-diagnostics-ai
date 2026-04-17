@@ -18,7 +18,7 @@ const AnatomyVisualizer = ({ analysisData }) => {
     { id: 'tb', label: t('tbRisk'), value: risks.tb, startX: 50, startY: 44, endX: 82, endY: 32 },
     { id: 'pneumonia', label: t('pneumoniaRisk'), value: risks.pneumonia, startX: 43, startY: 58, endX: 18, endY: 55 },
     { id: 'cancer', label: t('cancerRisk'), value: risks.cancer, startX: 58, startY: 58, endX: 82, endY: 55 },
-    { id: 'heart', label: 'Heart Risk', value: risks.heart, startX: 52, startY: 65, endX: 82, endY: 75 },
+    { id: 'heart', label: t('heartRisk'), value: risks.heart, startX: 52, startY: 65, endX: 82, endY: 75 },
     { id: 'diabetes', label: t('diabetesRisk'), value: risks.diabetes, startX: 50, startY: 78, endX: 18, endY: 82 }
   ];
 

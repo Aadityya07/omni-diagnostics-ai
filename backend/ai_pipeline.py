@@ -307,3 +307,82 @@ def generate_audio_recommendation(text, lang="en"):
     except Exception as e:
         print(f"⚠️ gTTS Generation Exception: {str(e)}")
         return None
+    
+
+
+   # --- 5. CONTEXT-AWARE CHATBOT ENGINE (Mistral LLM) ---
+def generate_chat_response(user_message, chat_history, patient_context):
+    print("💬 Processing Chat Request via Mistral...")
+    
+    # 1. Manually Extract variables so Mistral cannot miss or hallucinate them
+    cancer = patient_context.get('cancer', 0)
+    tb = patient_context.get('tb', 0)
+    diabetes = patient_context.get('diabetes', 0)
+    asthma = patient_context.get('asthma', 0)
+    heart = patient_context.get('heart', 0)
+    pneumonia = patient_context.get('pneumonia', 0)
+    
+    # Handle dict format for multilingual recommendations (grab English for the LLM context)
+    rec_data = patient_context.get('recommendationText', {})
+    recommendation = rec_data.get('en', str(rec_data)) if isinstance(rec_data, dict) else str(rec_data)
+    
+    insight_data = patient_context.get('explanation', {})
+    insight = insight_data.get('en', str(insight_data)) if isinstance(insight_data, dict) else str(insight_data)
+
+    # 2. Format history
+    history_str = ""
+    for msg in chat_history[-5:]:
+        role = "Patient" if msg['role'] == 'user' else "DiagnoAI"
+        history_str += f"{role}: {msg['content']}\n"
+
+    # 3. Create a STRICT prompt demanding conversational awareness
+    prompt = f"""You are DiagnoAI Co-Pilot, an advanced, empathetic, and highly professional medical AI assistant.
+You are discussing the patient's test results with them. 
+
+CRITICAL INSTRUCTIONS:
+1. CONVERSATIONAL AWARENESS: If the patient just says "hi", "hello", or gives a casual greeting, DO NOT recite their medical data. Simply greet them back warmly and ask how you can help them understand their dashboard results today.
+2. Base your medical answers EXACTLY on the Patient Dashboard Data provided below. Do not guess.
+3. Do NOT hallucinate. If the data says a risk is high (e.g., 90%+), you MUST acknowledge it is critical only when asked about their risks.
+4. Structure your response beautifully using markdown formatting (bullet points, bold text).
+
+=== PATIENT DASHBOARD DATA ===
+Risks:
+- Lung Cancer Risk: {cancer}%
+- Diabetes Risk: {diabetes}%
+- Heart Disease Risk: {heart}%
+- Asthma Risk: {asthma}%
+- Tuberculosis (TB) Risk: {tb}%
+- Pneumonia Risk: {pneumonia}%
+
+Official Clinical Insight:
+{insight}
+
+Official Clinical Recommendation:
+{recommendation}
+==============================
+
+=== RECENT CHAT HISTORY ===
+{history_str}
+===========================
+
+PATIENT QUESTION: {user_message}
+
+DiagnoAI Response:"""
+
+    try:
+        response = requests.post('http://localhost:11434/api/generate', json={
+            "model": "mistral", 
+            "prompt": prompt, 
+            "stream": False
+        }, timeout=60)
+        
+        if response.status_code == 200:
+            chat_text = response.json().get('response', '').strip()
+            print("✅ Chat response generated successfully!")
+            return {"status": "success", "response": chat_text}
+        else:
+            return {"status": "error", "response": "Mistral engine failed to generate a response."}
+            
+    except Exception as e:
+        print(f"⚠️ Chat Engine Error: {str(e)}")
+        return {"status": "error", "response": "I am currently unable to connect to my neural pathways. Please try again."}

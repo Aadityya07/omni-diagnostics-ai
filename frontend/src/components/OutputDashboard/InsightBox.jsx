@@ -6,9 +6,15 @@ import { Volume2, Loader2, Square } from 'lucide-react';
 const InsightBox = ({ explanation }) => {
   const { t, currentLanguage } = useLanguage();
   
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [audioSrc, setAudioSrc] = useState(null);
+  const [audioCache, setAudioCache] = useState({});
+  const [loadingStatus, setLoadingStatus] = useState({});
+  const [wantsToPlay, setWantsToPlay] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  
+  // NEW: State for psychological delay
+  const [hasPlayedMap, setHasPlayedMap] = useState({});
+  const [artificialLoading, setArtificialLoading] = useState(false);
+  
   const audioRef = useRef(null);
 
   let rawText = "";
@@ -18,51 +24,94 @@ const InsightBox = ({ explanation }) => {
     rawText = explanation || "";
   }
 
+  // SILENT BACKGROUND PRE-FETCH
   useEffect(() => {
-    setAudioSrc(null);
+    if (!explanation || typeof explanation !== 'object') return;
+
+    const prefetchAudio = async () => {
+      const langs = ['en', 'hi', 'mr'];
+      for (const lang of langs) {
+        const textToSpeak = explanation[lang];
+        if (textToSpeak && !audioCache[lang] && loadingStatus[lang] !== 'loading' && loadingStatus[lang] !== 'ready') {
+          setLoadingStatus(prev => ({ ...prev, [lang]: 'loading' }));
+          try {
+            const cleanText = textToSpeak.replace(/<[^>]*>?/gm, '').replace(/[*#]/g, '');
+            const response = await endpoints.generateAudio(cleanText, lang); 
+            if (response.audio_base64) {
+              setAudioCache(prev => ({ ...prev, [lang]: `data:audio/mpeg;base64,${response.audio_base64}` }));
+              setLoadingStatus(prev => ({ ...prev, [lang]: 'ready' }));
+            } else {
+              setLoadingStatus(prev => ({ ...prev, [lang]: 'error' }));
+            }
+          } catch (err) {
+            setLoadingStatus(prev => ({ ...prev, [lang]: 'error' }));
+          }
+        }
+      }
+    };
+    prefetchAudio();
+  }, [explanation]);
+
+  useEffect(() => {
     setIsPlaying(false);
+    setWantsToPlay(false);
     if (audioRef.current) {
       audioRef.current.pause();
+      audioRef.current.currentTime = 0;
     }
-  }, [currentLanguage, explanation]);
+  }, [currentLanguage]);
 
-  const handleAudioToggle = async () => {
-    if (audioSrc) {
-      if (isPlaying) {
-        audioRef.current.pause();
-        setIsPlaying(false);
-      } else {
-        audioRef.current.play();
-        setIsPlaying(true);
-      }
+  useEffect(() => {
+    if (wantsToPlay && audioCache[currentLanguage] && audioRef.current && !artificialLoading) {
+      audioRef.current.play();
+      setIsPlaying(true);
+      setWantsToPlay(false); 
+    }
+  }, [audioCache, currentLanguage, wantsToPlay, artificialLoading]);
+
+  const handleAudioToggle = () => {
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+      setWantsToPlay(false);
       return;
     }
 
-    setIsGenerating(true);
-    try {
-      const cleanText = rawText.replace(/<[^>]*>?/gm, '').replace(/[*#]/g, '');
-      const response = await endpoints.generateAudio(cleanText, currentLanguage); 
-      
-      if (response.audio_base64) {
-        setAudioSrc(`data:audio/mpeg;base64,${response.audio_base64}`);
-        setTimeout(() => {
-          if (audioRef.current) {
-            audioRef.current.play();
-            setIsPlaying(true);
-          }
-        }, 100);
-      }
-    } catch (err) {
-      console.error("Audio generation failed:", err);
-    } finally {
-      setIsGenerating(false);
+    // NEW: 2-Second Psychological Delay for the FIRST time playing this language
+    if (!hasPlayedMap[currentLanguage]) {
+      setArtificialLoading(true);
+      setTimeout(() => {
+        setArtificialLoading(false);
+        setHasPlayedMap(prev => ({ ...prev, [currentLanguage]: true }));
+        
+        // After delay, play if ready, otherwise set wantToPlay to wait for download
+        if (audioCache[currentLanguage] && audioRef.current) {
+          audioRef.current.play();
+          setIsPlaying(true);
+        } else {
+          setWantsToPlay(true);
+        }
+      }, 2000);
+      return;
     }
+
+    // Instant Play if they've already heard it once
+    if (audioCache[currentLanguage]) {
+      audioRef.current.play();
+      setIsPlaying(true);
+      return;
+    }
+
+    setWantsToPlay(true);
   };
 
   const formattedPoints = rawText
     .split('\n')
     .filter(point => point.trim().length > 2)
     .map(point => point.replace(/^[-\*•\d\.]+\s*/, '').trim());
+
+  // Show generating if it's artificially loading OR actually downloading
+  const showGenerating = artificialLoading || (loadingStatus[currentLanguage] === 'loading' && wantsToPlay);
 
   return (
     <div style={{
@@ -71,7 +120,6 @@ const InsightBox = ({ explanation }) => {
       position: 'relative'
     }}>
       
-      {/* Header with Restore Listen Button */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#141414', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ color: '#36565F' }}>✦</span> {t('aiInsight')}
@@ -79,17 +127,17 @@ const InsightBox = ({ explanation }) => {
 
         <button 
           onClick={handleAudioToggle}
-          disabled={isGenerating}
+          disabled={showGenerating}
           style={{
             display: 'flex', alignItems: 'center', gap: '8px',
             background: isPlaying ? 'rgba(229, 83, 83, 0.1)' : 'rgba(54, 86, 95, 0.1)',
             color: isPlaying ? '#E55353' : '#36565F',
             border: `1px solid ${isPlaying ? 'rgba(229, 83, 83, 0.3)' : 'rgba(54, 86, 95, 0.2)'}`,
             padding: '6px 14px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 600,
-            cursor: isGenerating ? 'not-allowed' : 'pointer', transition: 'all 0.3s'
+            cursor: showGenerating ? 'not-allowed' : 'pointer', transition: 'all 0.3s'
           }}
         >
-          {isGenerating ? (
+          {showGenerating ? (
              <><Loader2 size={16} className="animate-spin" /> Generating...</>
           ) : isPlaying ? (
              <><Square size={16} fill="currentColor" /> Stop</>
@@ -99,10 +147,10 @@ const InsightBox = ({ explanation }) => {
         </button>
       </div>
 
-      {audioSrc && (
+      {audioCache[currentLanguage] && (
         <audio 
           ref={audioRef} 
-          src={audioSrc} 
+          src={audioCache[currentLanguage]} 
           onEnded={() => setIsPlaying(false)} 
           style={{ display: 'none' }} 
         />

@@ -1,3 +1,4 @@
+import { ChatBotPanel, ChatFloatingButton } from './components/OutputDashboard/ChatBot';
 import React, { useState } from 'react';
 import LandingPage from './components/LandingPage';
 import Prism from './components/Prism'; 
@@ -11,6 +12,7 @@ import { LanguageProvider } from './context/LanguageContext';
 
 function AppContent() {
   const [showDashboard, setShowDashboard] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const { analysisData, isLoading, error, progress, analyze, resetAnalysis } = useAnalysis();
 
   const handleAnalyze = async (formData) => {
@@ -56,7 +58,37 @@ function AppContent() {
 
           {/* Main Dashboard Layout */}
           <div style={{ display: 'flex', gap: '24px', flex: 1, overflow: 'hidden' }}>
-            <InputPanel onAnalyze={handleAnalyze} isAnalyzing={isLoading} />
+            
+            {/* LEFT SIDE: Original Size Maintained (35%) */}
+            <div style={{ width: '35%', minWidth: '380px', position: 'relative', height: '100%' }}>
+              
+              {/* Patient Data Panel (Fades out smoothly when Chat opens) */}
+              <div style={{
+                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                opacity: isChatOpen ? 0 : 1,
+                transform: isChatOpen ? 'scale(0.95)' : 'scale(1)',
+                pointerEvents: isChatOpen ? 'none' : 'auto',
+                transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+                zIndex: isChatOpen ? 1 : 2
+              }}>
+                <InputPanel onAnalyze={handleAnalyze} isAnalyzing={isLoading} />
+              </div>
+
+              {/* Chatbot Panel (Fades in smoothly when Chat opens) */}
+              <div style={{
+                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                opacity: isChatOpen ? 1 : 0,
+                transform: isChatOpen ? 'scale(1)' : 'scale(1.05)',
+                pointerEvents: isChatOpen ? 'auto' : 'none',
+                transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+                zIndex: isChatOpen ? 2 : 1
+              }}>
+                <ChatBotPanel contextData={analysisData} onClose={() => setIsChatOpen(false)} />
+              </div>
+
+            </div>
+
+            {/* RIGHT SIDE: Output Dashboard */}
             <OutputDashboard
               analysisData={analysisData}
               isAnalyzing={isLoading}
@@ -65,6 +97,13 @@ function AppContent() {
               onRetry={resetAnalysis}
             />
           </div>
+
+          {/* FLOATING CHAT BUTTON */}
+          {showDashboard && !isChatOpen && analysisData && !isLoading && !error && (
+            <div className="animate-fadeIn">
+              <ChatFloatingButton onClick={() => setIsChatOpen(true)} />
+            </div>
+          )}
 
         </div>
       )}
